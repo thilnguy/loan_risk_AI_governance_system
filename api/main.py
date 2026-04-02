@@ -28,6 +28,7 @@ SCALER = None
 FEATURE_COLS = None
 MODEL_TYPE = "unknown"
 MODEL_VERSION = "v1.0"
+CIRCUIT_BREAKER_ACTIVE = False
 
 # ── Risk thresholds (configurable) ────────────────────────────────────────────
 THRESHOLD_LOW = 0.30       # below this → APPROVED
@@ -35,6 +36,7 @@ THRESHOLD_HIGH = 0.60      # above this → DECLINED
 # Between → REVIEW (human oversight required per EU AI Act)
 
 MODELS_DIR = os.path.join(os.path.dirname(__file__), "..", "models")
+MONITORING_DIR = os.path.join(os.path.dirname(__file__), "..", "monitoring")
 
 
 def load_model():
@@ -68,6 +70,20 @@ def load_model():
         with open(feat_path) as f:
             FEATURE_COLS = json.load(f)
         logger.info(f"✅ Feature columns loaded: {len(FEATURE_COLS)} features")
+
+    # Circuit Breaker Logic (Drift detection)
+    global CIRCUIT_BREAKER_ACTIVE
+    drift_file = os.path.join(MONITORING_DIR, "drift_results.json")
+    if os.path.exists(drift_file):
+        try:
+            with open(drift_file) as f:
+                drift_data = json.load(f)
+            drift_count = sum(1 for feat in drift_data.values() if feat.get("psi", 0) > 0.2)
+            if drift_count >= 3:
+                CIRCUIT_BREAKER_ACTIVE = True
+                logger.error(f"🚨 CIRCUIT BREAKER ACTIVATED! High drift detected in {drift_count} features. Forcing 100% human review.")
+        except Exception as e:
+            logger.warning(f"Failed to read drift results: {e}")
 
     return True
 
@@ -122,6 +138,14 @@ app.add_middleware(
 
 def make_decision(probability: float) -> tuple[str, str, str, bool]:
     """Map probability to credit decision with rationale."""
+    if CIRCUIT_BREAKER_ACTIVE:
+        return (
+            "REVIEW", 
+            "HIGH", 
+            "SYSTEM UNDER MAINTENANCE: High concept drift detected. Fallback circuit breaker activated. 100% human review required.", 
+            True
+        )
+
     risk_score = int(probability * 100)
 
     if probability < THRESHOLD_LOW:
