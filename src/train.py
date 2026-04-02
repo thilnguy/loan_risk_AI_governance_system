@@ -170,7 +170,6 @@ def train_xgboost(X_train, X_test, y_train, y_test):
             print(f"  {k}: {v:.4f}")
 
         # Save locally
-        model.save_model(os.path.join(MODELS_DIR, "xgboost_model.json"))
         joblib.dump(model, os.path.join(MODELS_DIR, "xgboost_model.pkl"))
 
     return model, y_pred, y_prob, metrics
