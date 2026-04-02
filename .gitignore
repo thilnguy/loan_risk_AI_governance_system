@@ -10,7 +10,7 @@ dist/
 build/
 .pytest_cache/
 *.log
-data/
+data/processed/
 models/
 reports/
 monitoring/
