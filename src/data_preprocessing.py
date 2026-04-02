@@ -178,7 +178,10 @@ def split_and_scale(df: pd.DataFrame):
     """
     protected_cols = ["gender", "age_group", "gender_encoded", "age_group_encoded"]
     target_col = "default"
-    feature_cols = [c for c in df.columns if c not in protected_cols + [target_col]]
+    
+    # AI Governance Unaware Model: Exclude demographic proxies from training features
+    excluded_cols = protected_cols + [target_col, "age", "personal_status"]
+    feature_cols = [c for c in df.columns if c not in excluded_cols]
 
     X, y, protected = df[feature_cols], df[target_col], df[protected_cols]
 
