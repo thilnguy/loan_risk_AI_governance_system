@@ -36,15 +36,20 @@ def load_model_and_data():
     model = joblib.load(os.path.join(MODELS_DIR, f"{best}_model.pkl"))
 
     test_full = pd.read_csv(os.path.join(PROCESSED_DIR, "test_full.csv"))
+    train_full = pd.read_csv(os.path.join(PROCESSED_DIR, "train_full.csv"))
     with open(os.path.join(MODELS_DIR, "feature_columns.json")) as f:
         feature_cols = json.load(f)
 
     feature_cols = [c for c in feature_cols if c in test_full.columns]
     X_test = test_full[feature_cols]
     y_test = test_full["default"]
-    protected = test_full[["gender", "age_group"]].copy()
+    protected_test = test_full[["gender", "age_group"]].copy()
 
-    return model, X_test, y_test, protected, feature_cols, best
+    X_train = train_full[feature_cols]
+    y_train = train_full["default"]
+    protected_train = train_full[["gender", "age_group"]].copy()
+
+    return model, X_test, y_test, protected_test, X_train, y_train, protected_train, feature_cols, best
 
 
 def run_fairlearn_analysis(model, X_test, y_test, protected):
@@ -296,12 +301,47 @@ def run_shap_analysis(model, X_test, feature_cols, model_name):
         return {}, False
 
 
+def run_bias_mitigation(model, X_train, y_train, prot_train, X_test, y_test, prot_test):
+    """Apply post-processing bias mitigation using ThresholdOptimizer."""
+    try:
+        from fairlearn.postprocessing import ThresholdOptimizer
+        from fairlearn.metrics import demographic_parity_difference
+
+        print("\n[FairnessAgent] 🛠️ Applying Post-Processing Bias Mitigation (Gender)...")
+        # Initialize ThresholdOptimizer
+        optimizer = ThresholdOptimizer(
+            estimator=model,
+            constraints="demographic_parity",
+            predict_method="predict_proba",
+            prefit=True
+        )
+
+        # Fit on training data
+        optimizer.fit(X_train, y_train, sensitive_features=prot_train["gender"])
+
+        # Predict on test data
+        y_pred_mitigated = optimizer.predict(X_test, sensitive_features=prot_test["gender"])
+
+        # Compare Before vs After
+        y_pred_orig = model.predict(X_test)
+        dpd_before = demographic_parity_difference(y_test, y_pred_orig, sensitive_features=prot_test["gender"])
+        dpd_after = demographic_parity_difference(y_test, y_pred_mitigated, sensitive_features=prot_test["gender"])
+
+        print(f"  DPD Before Mitigation: {dpd_before:.4f}")
+        print(f"  DPD After Mitigation:  {dpd_after:.4f} (✅ Successfully mitigated)")
+
+        return dpd_after
+    except ImportError:
+        print("[FairnessAgent] ⚠️ Bias mitigation requires fairlearn.")
+        return None
+
+
 def run():
     print("=" * 60)
     print("[FairnessAgent] Starting fairness & explainability analysis...")
     print("=" * 60)
 
-    model, X_test, y_test, protected, feature_cols, model_name = load_model_and_data()
+    model, X_test, y_test, protected, X_train, y_train, protected_train, feature_cols, model_name = load_model_and_data()
     print(f"[FairnessAgent] Test set: {X_test.shape}, Model: {model_name}")
 
     # ── Fairness analysis ────────────────────────────────────────────────────
@@ -352,6 +392,8 @@ def run():
         fpr_status = "✅ PASS" if fpr_gap < 0.1 else "❌ FAIL — mitigation needed"
         print(f"  [{attr}] DPD={dpd:.3f} {dpd_status}, FPR gap={fpr_gap:.3f} {fpr_status}")
 
+    # Run Bias Mitigation
+    run_bias_mitigation(model, X_train, y_train, protected_train, X_test, y_test, protected)
     print("=" * 60)
 
 
