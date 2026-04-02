@@ -18,34 +18,32 @@ A bank/insurance credit scoring system that predicts the **probability of credit
 ---
 
 ## 🏗️ Architecture
+ 
+```mermaid
+graph TD
+    subgraph DataLayer ["1. Data Layer (DVC tracked)"]
+        A[German Credit Raw] --> B[Unaware Preprocessing]
+        B --> C[Train/Test/Future Split]
+    end
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                  Loan Risk AI Governance System              │
-├─────────────────────────────────────────────────────────────┤
-│  1. DATA LAYER                                               │
-│     German Credit Dataset (UCI) → Preprocessing → Splits    │
-│     Temporal split: Train(70%) | Test(15%) | Future(15%)    │
-│                                                             │
-│  2. ML LAYER                                                 │
-│     Logistic Regression + XGBoost ─► MLflow Tracking        │
-│     Metrics: Accuracy, Precision, Recall, F1, ROC-AUC       │
-│                                                             │
-│  3. SERVING LAYER                                            │
-│     FastAPI /predict ─► Docker ─► GitHub Actions CI/CD      │
-│     Risk zones: APPROVED | REVIEW | DECLINED                │
-│                                                             │
-│  4. MONITORING LAYER                                         │
-│     Evidently AI ─► Drift Report (HTML)                     │
-│     PSI per feature | Performance degradation tracking      │
-│                                                             │
-│  5. RESPONSIBLE AI LAYER                                     │
-│     Fairlearn ─► Demographic Parity | Equal Opportunity     │
-│     SHAP ─► Global + Local Explanations                     │
-│                                                             │
-│  6. GOVERNANCE LAYER (EU AI Act)                             │
-│     Model Card | Risk Assessment | Monitoring Plan | HO     │
-└─────────────────────────────────────────────────────────────┘
+    subgraph MLLayer ["2. ML Layer (MLflow tracked)"]
+        C --> D[XGBoost / LogReg Training]
+        D --> E[Model Registry]
+    end
+
+    subgraph ServingLayer ["3. Serving Layer (FastAPI)"]
+        E --> F[Inference Engine]
+        F --> G[SHAP Explainer]
+        F --> H[Background Logger]
+    end
+
+    subgraph GovernanceLayer ["4. Governance Layer (EU AI Act)"]
+        G --> I[Right to Explanation]
+        H --> J[Inference Audit Trail]
+        F --> K[Fairness Post-processing]
+    end
+
+    K --> L[Equal Opportunity Metrics]
 ```
 
 ---
@@ -202,13 +200,13 @@ curl -X POST "http://localhost:8000/predict" \
 
 ## 📊 Model Performance
 
-| Metric | Logistic Regression | XGBoost |
+| Metric | Logistic Regression | XGBoost (Champion) |
 |---|---|---|
-| Accuracy | ~0.72 | ~0.78 |
-| Precision | ~0.62 | ~0.68 |
-| Recall | ~0.58 | ~0.64 |
-| F1-Score | ~0.60 | ~0.66 |
-| **ROC-AUC** | ~0.76 | **~0.82** |
+| Accuracy | 0.74 | **0.81** |
+| Precision | 0.58 | **0.73** |
+| Recall | **0.76** | 0.66 |
+| F1-Score | 0.66 | **0.69** |
+| **ROC-AUC** | 0.81 | **0.82** |
 
 > Run `mlflow ui` to see exact metrics for each training run.
 
@@ -243,16 +241,16 @@ See `monitoring/drift_report.html` for full interactive Evidently AI report.
 
 ## 🏛️ EU AI Act Compliance Mapping
 
-| Obligation | Article | Status |
+| Obligation | Article | Implementation / Status |
 |---|---|---|
-| Risk classification | Annex III | ✅ HIGH-RISK declared |
+| Risk classification | Annex III | ✅ HIGH-RISK declared (Credit Ranking) |
 | Risk management | Art. 9 | ✅ `governance/risk_assessment.md` |
-| Data governance | Art. 10 | ✅ Preprocessing pipeline documented |
+| Data governance | Art. 10 | ✅ `DVC` lineage + Unaware Model architecture |
 | Technical docs | Art. 11 | ✅ `governance/model_card.md` |
-| Transparency | Art. 13 | ✅ SHAP explanations + API docs |
-| Human oversight | Art. 14 | ✅ REVIEW zone enforced (30%–60%) |
-| Accuracy & monitoring | Art. 15 | ✅ Evidently AI + weekly metrics |
-| Post-market monitoring | Art. 72 | ✅ `governance/monitoring_plan.md` |
+| Transparency | Art. 13 | ✅ **SHAP Local Explanations** per prediction |
+| Human oversight | Art. 14 | ✅ **Circuit Breaker** (Drift-triggered 100% review) |
+| Accuracy & monitoring | Art. 15 | ✅ Evidently AI + **Inference Background Logging** |
+| Post-market monitoring| Art. 72 | ✅ `data/production_logs.csv` audit trail |
 
 ---
 
@@ -272,7 +270,7 @@ See `monitoring/drift_report.html` for full interactive Evidently AI report.
 
 ---
 
-## 💬 CV Bullets (Ready to Use)
+## 🌟 Key Project Highlights
 
 - Built an **end-to-end ML pipeline** with MLflow tracking, XGBoost training, and FastAPI deployment for credit risk prediction
 - Implemented **model monitoring** including data drift detection (PSI-based) and performance degradation tracking using Evidently AI
