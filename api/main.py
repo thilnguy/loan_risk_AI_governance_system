@@ -9,10 +9,13 @@ import logging
 from contextlib import asynccontextmanager
 from typing import Optional
 
+import datetime
+import importlib
+
 import joblib
 import numpy as np
 import pandas as pd
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -37,6 +40,23 @@ THRESHOLD_HIGH = 0.60      # above this → DECLINED
 
 MODELS_DIR = os.path.join(os.path.dirname(__file__), "..", "models")
 MONITORING_DIR = os.path.join(os.path.dirname(__file__), "..", "monitoring")
+DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
+
+def log_inference(applicant_id: str, probability: float, decision: str, human_review: bool, features: dict):
+    """Background task to save inference logs to CSV."""
+    log_file = os.path.join(DATA_DIR, "production_logs.csv")
+    record = {
+        "timestamp": datetime.datetime.now().isoformat(),
+        "applicant_id": applicant_id or "N/A",
+        "probability": round(probability, 4),
+        "decision": decision,
+        "human_review": human_review,
+        **features
+    }
+    df = pd.DataFrame([record])
+    # Append without header if file exists
+    df.to_csv(log_file, mode='a', header=not os.path.exists(log_file), index=False)
+    logger.info(f"💾 Logged inference for {applicant_id} to production database.")
 
 
 def load_model():
@@ -190,6 +210,7 @@ async def health_check():
 @app.post("/predict", response_model=PredictionResponse, tags=["Prediction"])
 async def predict(
     features: ApplicantFeatures,
+    background_tasks: BackgroundTasks,
     applicant_id: Optional[str] = None,
 ):
     """
@@ -256,10 +277,36 @@ async def predict(
         decision, risk_level, rationale, human_review = make_decision(probability)
         risk_score = int(probability * 100)
 
+        # Local Explanation using SHAP (EU AI Act Right to Explanation)
+        explanations = []
+        try:
+            if MODEL_TYPE == "xgboost" and FEATURE_COLS:
+                import shap
+                explainer = shap.TreeExplainer(MODEL)
+                # xgb predict_proba with TreeExplainer might give log-odds, fine for contribution direction
+                shap_values = explainer.shap_values(X)
+                # If multiclass output, shap_values might be a list. For binary, usually an array or list of length 2
+                contribs = shap_values[0] if isinstance(shap_values, list) else shap_values[0]
+                
+                # Sort indices by absolute contribution
+                top_indices = np.argsort(np.abs(contribs))[-3:][::-1]
+                for idx in top_indices:
+                    val = contribs[idx]
+                    feat = FEATURE_COLS[idx]
+                    direction = "increases risk" if val > 0 else "decreases risk"
+                    # Only add meaningful contributions
+                    if abs(val) > 0.01:
+                        explanations.append(f"'{feat}' {direction} (impact: {val:+.3f})")
+        except Exception as e:
+            logger.warning(f"Failed to generate SHAP explanation: {e}")
+
         logger.info(
             f"Prediction | ID={applicant_id or 'N/A'} | "
             f"prob={probability:.3f} | decision={decision}"
         )
+
+        # Append to Inference Logger
+        background_tasks.add_task(log_inference, applicant_id, probability, decision, human_review, raw_features)
 
         return PredictionResponse(
             applicant_id=applicant_id,
@@ -270,6 +317,7 @@ async def predict(
             decision_rationale=rationale,
             model_version=f"{MODEL_TYPE}-{MODEL_VERSION}",
             human_review_required=human_review,
+            local_explanation=explanations,
         )
 
     except Exception as e:

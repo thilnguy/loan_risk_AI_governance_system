@@ -129,6 +129,9 @@ class PredictionResponse(BaseModel):
     human_review_required: bool = Field(
         ..., description="Whether human review is required (EU AI Act requirement)"
     )
+    local_explanation: list[str] = Field(
+        default_factory=list, description="Top positive and negative SHAP contributing features (Right to Explanation)"
+    )
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -141,6 +144,7 @@ class PredictionResponse(BaseModel):
                 "decision_rationale": "Low probability of default. Standard eligibility criteria met.",
                 "model_version": "xgboost-v1.0",
                 "human_review_required": False,
+                "local_explanation": ["checking_status decreases risk (impact: -0.82)", "credit_amount increases risk (impact: +0.45)"]
             }
         }
     )
