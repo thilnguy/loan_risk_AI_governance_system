@@ -1,0 +1,135 @@
+name: CI — Loan Risk AI Governance System
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ── Test & Lint ────────────────────────────────────────────────────────────
+  test:
+    name: Test & Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run data preprocessing
+        run: python src/data_preprocessing.py
+
+      - name: Run training pipeline
+        run: python src/train.py
+
+      - name: Run unit tests
+        run: pytest tests/ -v --tb=short
+
+      - name: Upload MLflow artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mlflow-runs
+          path: mlruns/
+          retention-days: 7
+
+      - name: Upload reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: reports
+          path: reports/
+          retention-days: 7
+
+  # ── Docker Build ───────────────────────────────────────────────────────────
+  docker:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11 (for model training)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies and train model
+        run: |
+          pip install -r requirements.txt
+          python src/data_preprocessing.py
+          python src/train.py
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: api/Dockerfile
+          push: false
+          tags: loan-risk-api:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Test Docker container
+        run: |
+          docker run -d --name loan-api -p 8000:8000 loan-risk-api:${{ github.sha }}
+          sleep 10
+          curl -f http://localhost:8000/health || exit 1
+          docker logs loan-api
+          docker stop loan-api
+
+  # ── Governance Check ───────────────────────────────────────────────────────
+  governance:
+    name: Governance & Fairness Check
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies and prepare data
+        run: |
+          pip install -r requirements.txt
+          python src/data_preprocessing.py
+          python src/train.py
+
+      - name: Run fairness analysis
+        run: python src/fairness.py
+
+      - name: Run drift monitoring
+        run: python src/monitoring.py
+
+      - name: Check governance docs exist
+        run: |
+          test -f governance/model_card.md || (echo "❌ model_card.md missing" && exit 1)
+          test -f governance/risk_assessment.md || (echo "❌ risk_assessment.md missing" && exit 1)
+          test -f governance/monitoring_plan.md || (echo "❌ monitoring_plan.md missing" && exit 1)
+          test -f governance/human_oversight.md || (echo "❌ human_oversight.md missing" && exit 1)
+          echo "✅ All governance docs present"
+
+      - name: Upload fairness reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fairness-reports
+          path: reports/
+          retention-days: 30
