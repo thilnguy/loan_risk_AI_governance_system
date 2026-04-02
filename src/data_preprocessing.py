@@ -66,7 +66,7 @@ def load_german_credit() -> pd.DataFrame:
         return _generate_synthetic_data()
 
 
-def _generate_synthetic_data(n: int = 1000, seed: int = 42) -> pd.DataFrame:
+def _generate_synthetic_data(n: int = 2000, seed: int = 42) -> pd.DataFrame:
     """
     Generate a synthetic credit dataset with realistic distributions.
     Includes gender proxy and age for fairness analysis.

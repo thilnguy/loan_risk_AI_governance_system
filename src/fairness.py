@@ -305,13 +305,15 @@ def run_bias_mitigation(model, X_train, y_train, prot_train, X_test, y_test, pro
     """Apply post-processing bias mitigation using ThresholdOptimizer."""
     try:
         from fairlearn.postprocessing import ThresholdOptimizer
-        from fairlearn.metrics import demographic_parity_difference
+        from fairlearn.metrics import demographic_parity_difference, MetricFrame
+        from sklearn.metrics import recall_score as tpr_score
 
         print("\n[FairnessAgent] 🛠️ Applying Post-Processing Bias Mitigation (Gender)...")
+        print("  Metric: Equalized Odds (Equal Opportunity + FPR Parity)")
         # Initialize ThresholdOptimizer
         optimizer = ThresholdOptimizer(
             estimator=model,
-            constraints="demographic_parity",
+            constraints="equalized_odds",
             predict_method="predict_proba",
             prefit=True
         )
@@ -324,11 +326,23 @@ def run_bias_mitigation(model, X_train, y_train, prot_train, X_test, y_test, pro
 
         # Compare Before vs After
         y_pred_orig = model.predict(X_test)
+        
+        # Calculate TPR per group before/after
+        mf_before = MetricFrame(metrics=tpr_score, y_true=y_test, y_pred=y_pred_orig, sensitive_features=prot_test["gender"])
+        mf_after = MetricFrame(metrics=tpr_score, y_true=y_test, y_pred=y_pred_mitigated, sensitive_features=prot_test["gender"])
+        
         dpd_before = demographic_parity_difference(y_test, y_pred_orig, sensitive_features=prot_test["gender"])
         dpd_after = demographic_parity_difference(y_test, y_pred_mitigated, sensitive_features=prot_test["gender"])
 
-        print(f"  DPD Before Mitigation: {dpd_before:.4f}")
-        print(f"  DPD After Mitigation:  {dpd_after:.4f} (✅ Successfully mitigated)")
+        print(f"\n  Fairness Comparison (Before -> After):")
+        print(f"    DPD (Selection Rate Gap): {dpd_before:.4f} -> {dpd_after:.4f}")
+        print(f"    TPR (Equal Opportunity) per Gender group:")
+        for group in mf_before.by_group.index:
+            tpr_b = mf_before.by_group[group]
+            tpr_a = mf_after.by_group[group]
+            print(f"      - {group}: {tpr_b:.4f} -> {tpr_a:.4f}")
+            
+        print("\n  (✅ Mitigation using Equalized Odds directly balances the True Positive Rates shown above)")
 
         return dpd_after
     except ImportError:
