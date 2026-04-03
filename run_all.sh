@@ -25,21 +25,45 @@ echo "  Running full pipeline: Data → Train → Monitor → Fairness"
 echo "  Project root: $PROJECT_ROOT"
 
 # ── 0. Check Python ────────────────────────────────────────────────────────
-if ! command -v python3 &>/dev/null; then
-  error "Python 3 not found. Please install Python 3.9+"
+# Use Python 3.11 for stability (Python 3.14 has C API compatibility issues with pandas)
+if command -v python3.11 &>/dev/null; then
+  PYTHON=$(command -v python3.11)
+elif command -v python3.13 &>/dev/null; then
+  warn "Python 3.11 not found, falling back to 3.13"
+  PYTHON=$(command -v python3.13)
+elif command -v python3 &>/dev/null; then
+  warn "Using default python3"
+  PYTHON=$(command -v python3)
+else
+  error "Python 3 not found. Please install Python 3.11+"
 fi
-PYTHON=$(command -v python3)
-log "Python: $($PYTHON --version)"
 
-# ── 1. Create virtual environment (if not exists) ─────────────────────────
+log "Using Python: $($PYTHON --version) at $PYTHON"
+
+# ── 1. Create/Update virtual environment ─────────────────────────
+# Recreate venv if it doesn't exist or uses the wrong Python version
+RECREATE_VENV=false
 if [ ! -d "venv" ]; then
+  RECREATE_VENV=true
+else
+  VENV_PYTHON_VERSION=$(venv/bin/python --version 2>&1 | cut -d' ' -f2 | cut -d. -f1,2)
+  TARGET_PYTHON_VERSION=$($PYTHON --version 2>&1 | cut -d' ' -f2 | cut -d. -f1,2)
+  if [ "$VENV_PYTHON_VERSION" != "$TARGET_PYTHON_VERSION" ]; then
+    warn "Venv version ($VENV_PYTHON_VERSION) mismatch with target ($TARGET_PYTHON_VERSION). Recreating..."
+    rm -rf venv
+    RECREATE_VENV=true
+  fi
+fi
+
+if [ "$RECREATE_VENV" = true ]; then
   header "📦 Agent 0: Setup — Creating virtual environment"
   $PYTHON -m venv venv
-  log "Virtual environment created"
+  log "Virtual environment created with $($PYTHON --version)"
 fi
 
 source venv/bin/activate
-log "Virtual environment activated"
+PYTHON=python
+log "Virtual environment activated ($($PYTHON --version))"
 
 # ── 2. Install dependencies ──────────────────────────────────────────────
 header "📦 Agent 0: Setup — Installing dependencies"

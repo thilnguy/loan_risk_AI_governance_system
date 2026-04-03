@@ -224,7 +224,7 @@ def run_shap_analysis(model, X_test, feature_cols, model_name):
     """Generate SHAP global summary and local force plot."""
     try:
         import shap
-        shap.initjs()
+        # shap.initjs() is only for Jupyter/IPython, removing for script compatibility
 
         print("[FairnessAgent] Computing SHAP values...")
         X_sample = X_test.iloc[:min(200, len(X_test))].values

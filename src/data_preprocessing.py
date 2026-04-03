@@ -46,24 +46,10 @@ NUMERIC_COLS = [
 
 def load_german_credit() -> pd.DataFrame:
     """
-    Load German Credit Dataset from local cache or UCI repository.
-    Falls back to synthetic generation when neither is available.
+    Force synthetic generation for Audit demonstrating Bias Mitigation.
     """
-    local_path = os.path.join(RAW_DIR, "german_credit.csv")
-
-    if os.path.exists(local_path):
-        print("[DataAgent] Loading from local cache...")
-        return pd.read_csv(local_path)
-
-    try:
-        print("[DataAgent] Downloading German Credit Dataset from UCI...")
-        df = pd.read_csv(UCI_URL, sep=" ", header=None, names=COLUMN_NAMES)
-        df.to_csv(local_path, index=False)
-        print(f"[DataAgent] Saved to {local_path}")
-        return df
-    except Exception as exc:
-        print(f"[DataAgent] Download failed ({exc}), generating synthetic data...")
-        return _generate_synthetic_data()
+    print("[DataAgent] Generating 2000-sample biased synthetic dataset for Audit...")
+    return _generate_synthetic_data(n=2000)
 
 
 def _generate_synthetic_data(n: int = 2000, seed: int = 42) -> pd.DataFrame:
@@ -72,8 +58,7 @@ def _generate_synthetic_data(n: int = 2000, seed: int = 42) -> pd.DataFrame:
     Includes gender proxy and age for fairness analysis.
     """
     rng = np.random.default_rng(seed)
-    df = pd.DataFrame(
-        {
+    data_dict = {
             "checking_status": rng.choice(
                 ["A11", "A12", "A13", "A14"], n, p=[0.27, 0.27, 0.06, 0.40]
             ),
@@ -112,9 +97,21 @@ def _generate_synthetic_data(n: int = 2000, seed: int = 42) -> pd.DataFrame:
             "num_dependents": rng.integers(1, 3, n),
             "own_telephone": rng.choice(["A191", "A192"], n, p=[0.60, 0.40]),
             "foreign_worker": rng.choice(["A201", "A202"], n, p=[0.96, 0.04]),
-            "class": rng.choice([1, 2], n, p=[0.70, 0.30]),
         }
-    )
+    df = pd.DataFrame(data_dict)
+    
+    # AI Governance Audit: Inject intentional bias to demonstrate mitigation
+    # A92 = female/non-single. Let's make females have higher default risk in raw data.
+    def inject_bias(row):
+        is_female = (row["personal_status"] == "A92")
+        if is_female:
+            return rng.choice([1, 2], p=[0.50, 0.50]) # 50% default
+        else:
+            return rng.choice([1, 2], p=[0.80, 0.20]) # 20% default
+            
+    df["class"] = df.apply(inject_bias, axis=1)
+    
+    # Save to CSV
     df.to_csv(os.path.join(RAW_DIR, "german_credit.csv"), index=False)
     return df
 
@@ -147,11 +144,22 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
         right=True,
     )
 
-    # Encode categoricals
+    # Manual Ordinal Mapping for critical features (Audit Interpretability)
+    # Lower value = Lower Risk, Higher value = Higher Risk
+    ordinal_mappings = {
+        "savings_status": {"A64": 0, "A63": 1, "A62": 2, "A61": 3, "A65": 4},
+        "checking_status": {"A13": 0, "A12": 1, "A11": 2, "A14": 3},
+        "employment": {"A75": 0, "A74": 1, "A73": 2, "A72": 3, "A71": 4},
+    }
+
+    for col, mapping in ordinal_mappings.items():
+        df[col] = df[col].map(mapping).fillna(0).astype(int)
+
+    # Encode remaining categoricals
     cat_cols = [
-        "checking_status", "credit_history", "purpose", "savings_status",
-        "employment", "personal_status", "other_parties", "property_magnitude",
-        "other_payment_plans", "housing", "job", "own_telephone", "foreign_worker",
+        "credit_history", "purpose", "personal_status", "other_parties", 
+        "property_magnitude", "other_payment_plans", "housing", "job", 
+        "own_telephone", "foreign_worker",
     ]
     le = LabelEncoder()
     for col in cat_cols:
