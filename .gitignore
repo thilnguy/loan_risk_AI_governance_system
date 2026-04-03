@@ -14,5 +14,7 @@ data/processed/
 models/
 reports/
 monitoring/
+data/production_logs.csv
 .coverage
 htmlcov/
+

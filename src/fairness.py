@@ -98,13 +98,14 @@ def run_fairlearn_analysis(model, X_test, y_test, protected):
             recall_gap = float(recall_vals.max() - recall_vals.min()) if len(recall_vals) > 1 else 0.0
 
             results[sensitive_col] = {
-                "by_group": mf.by_group.to_dict(),
+                "by_group": mf.by_group.to_dict(orient='index'),
                 "overall": mf.overall.to_dict(),
                 "demographic_parity_difference": float(dpd),
                 "equalized_odds_difference": float(eod),
                 "fpr_gap": fpr_gap,
                 "recall_gap": recall_gap,
             }
+
 
             print(f"\n[FairnessAgent] === {sensitive_col.upper()} FAIRNESS ===")
             print(f"  Demographic Parity Difference: {dpd:.4f} (|threshold|<0.1 is good)")
@@ -136,21 +137,29 @@ def run_manual_fairness(model, X_test, y_test, protected):
 
         group_metrics = {}
         for group in sorted(groups):
-            mask = (sensitive == group).values  # convert to numpy bool array
-            if mask.sum() < 5:
+            mask = (sensitive == group).values
+            if mask.sum() < 2:  # Reduced threshold to allow more groups to be plotted
                 continue
             yt = y_test.iloc[mask] if hasattr(y_test, "iloc") else y_test[mask]
             yp = y_pred[mask]
-            tn, fp, fn, tp = confusion_matrix(yt, yp, labels=[0, 1]).ravel() if len(np.unique(yp)) > 1 else (0, 0, 0, 0)
+            
+            # Use explicit labels to ensure 2x2 matrix even if some classes missing in subgroup
+            cm = confusion_matrix(yt, yp, labels=[0, 1])
+            tn, fp, fn, tp = cm.ravel()
+            
+            tpr = tp / (tp + fn) if (tp + fn) > 0 else 0.0
             fpr = fp / (fp + tn) if (fp + tn) > 0 else 0.0
+            
             group_metrics[group] = {
                 "accuracy": accuracy_score(yt, yp),
-                "recall": recall_score(yt, yp, zero_division=0),
+                "recall": float(tpr), # Recall IS TPR
+                "true_positive_rate": float(tpr),
                 "precision": precision_score(yt, yp, zero_division=0),
                 "false_positive_rate": float(fpr),
                 "selection_rate": float(yp.mean()),
                 "n": int(mask.sum()),
             }
+
 
         sel_rates = [v["selection_rate"] for v in group_metrics.values()]
         recalls = [v["recall"] for v in group_metrics.values()]
@@ -201,10 +210,12 @@ def plot_fairness_comparison(results: dict, output_path: str):
         ax.set_title(f"Fairness by {sensitive_col.replace('_', ' ').title()}", fontsize=13, fontweight="bold")
         ax.set_xticks(x + width * (len(groups) - 1) / 2)
         ax.set_xticklabels([m.replace("_", "\n") for m in available_metrics], fontsize=9)
-        ax.set_ylim(0, 1.15)
+        ax.set_ylim(0, 1.1) 
         ax.set_ylabel("Score", fontsize=11)
-        ax.legend(fontsize=9)
+        ax.legend(fontsize=8, loc='upper right')
         ax.grid(True, axis="y", alpha=0.3)
+
+
 
         # Annotate disparities
         dpd = data.get("demographic_parity_difference", 0)

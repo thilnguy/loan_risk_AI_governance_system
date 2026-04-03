@@ -1,0 +1,31 @@
+{
+  "model": "xgboost",
+  "fairness_library": "fairlearn",
+  "shap_available": true,
+  "metrics": {
+    "gender": {
+      "demographic_parity_difference": 0.013299377475947893,
+      "equalized_odds_difference": 0.0467479674796748,
+      "fpr_gap": 0.0467479674796748,
+      "recall_gap": 0.002886002886002881
+    },
+    "age_group": {
+      "demographic_parity_difference": 0.10559305689488913,
+      "equalized_odds_difference": 0.21695652173913044,
+      "fpr_gap": 0.21695652173913044,
+      "recall_gap": 0.19444444444444442
+    }
+  },
+  "top_shap_features": {
+    "credit_amount": 0.3432225286960602,
+    "duration": 0.2864530682563782,
+    "existing_credits": 0.19853830337524414,
+    "installment_commitment": 0.15383002161979675,
+    "savings_status": 0.13998419046401978,
+    "purpose": 0.12578532099723816,
+    "residence_since": 0.11790534853935242,
+    "checking_status": 0.11283817887306213,
+    "property_magnitude": 0.09706786274909973,
+    "housing": 0.09313249588012695
+  }
+}

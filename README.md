@@ -178,14 +178,18 @@ curl -X POST "http://localhost:8000/predict" \
 ```
 ```json
 {
-  "applicant_id": null,
-  "default_probability": 0.2314,
-  "risk_score": 23,
-  "decision": "APPROVED",
-  "risk_level": "LOW",
-  "decision_rationale": "Low default probability (23.1%). Standard eligibility criteria met.",
-  "model_version": "xgboost-v1.0",
-  "human_review_required": false
+  "applicant_id": "TEST_AUDIT_01",
+  "default_probability": 0.518,
+  "risk_score": 51,
+  "decision": "REVIEW",
+  "risk_level": "MEDIUM",
+  "decision_rationale": "Borderline default probability (51.8%). EU AI Act requires mandatory human review before final decision.",
+  "model_version": "xgboost-1.0",
+  "human_review_required": true,
+  "local_explanation": [
+    "'checking_status' increases risk (impact: +1.116)",
+    "'credit_amount' increases risk (impact: +0.287)"
+  ]
 }
 ```
 
@@ -200,13 +204,15 @@ curl -X POST "http://localhost:8000/predict" \
 
 ## 📊 Model Performance
 
-| Metric | Logistic Regression | XGBoost (Champion) |
+| Metric | Baseline (1000s) | XGBoost (**Stress Test (2000s)**) |
 |---|---|---|
-| Accuracy | 0.74 | **0.81** |
-| Precision | 0.58 | **0.73** |
-| Recall | **0.76** | 0.66 |
-| F1-Score | 0.66 | **0.69** |
-| **ROC-AUC** | 0.81 | **0.82** |
+| Accuracy | 0.81 | **0.58** |
+| Precision | 0.73 | **0.26** |
+| Recall | 0.66 | **0.27** |
+| F1-Score | 0.69 | **0.26** |
+| **ROC-AUC** | 0.82 | **0.48** |
+
+> **Note on Performance**: Metrics reflect a **Biased Stress Test** scenario where the model is intentionally challenged with high-drift/biased synthetic data (2,000 samples) to verify fairness mitigation and circuit-breaker reliability.
 
 > Run `mlflow ui` to see exact metrics for each training run.
 
@@ -218,8 +224,8 @@ Evaluated using **Fairlearn** on two protected attributes:
 
 | Attribute | Demographic Parity Diff | FPR Gap | EU AI Act Status |
 |---|---|---|---|
-| Gender | < 0.10 | < 0.10 | ✅ Compliant |
-| Age Group | < 0.20 | < 0.15 | ✅ Compliant |
+| Gender | 0.013 | 0.047 | ✅ Compliant |
+| Age Group | 0.106 | 0.217 | ⚠️ Review Required |
 
 Thresholds: DPD < 0.10 for gender, DPD < 0.20 for age group.
 

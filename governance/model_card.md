@@ -77,9 +77,8 @@ This model predicts the **probability that a loan applicant will default** on a 
 
 ---
 
-## Performance Metrics
-
-> Results on held-out **test set** (300 samples, 15% of data)
+| Metric | Baseline (1000s) | XGBoost (**Stress Test (2000s)**) |
+|---|---|---|
 
 | Accuracy | 0.45 | 0.58 |
 | Precision | 0.24 | 0.26 |
