@@ -40,7 +40,7 @@ This model predicts the **probability that a loan applicant will default** on a 
 |---|---|
 | **Dataset** | German Credit Dataset (UCI Machine Learning Repository) |
 | **Original source** | Prof. Hans Hofmann, Universität Hamburg |
-| **Size** | 1,000 records |
+| **Size** | 2,000 records (including biased synthetic augmentation) |
 | **Features** | 20 predictors (financial history, demographics, loan characteristics) |
 | **Target** | Binary: 1 = default (bad credit), 0 = no default (good credit) |
 | **Time period** | Historical dataset (pre-2000) |
@@ -55,7 +55,7 @@ This model predicts the **probability that a loan applicant will default** on a 
 
 ### Known Data Limitations
 - Dataset is >25 years old — distribution may not reflect modern credit behavior
-- 1,000 samples is relatively small for production deployment
+- 2,000 samples is the total size (including synthetic stress test data)
 - Gender is inferred from `personal_status` field — not a direct attribute
 - No geographic diversity beyond Germany
 
@@ -65,7 +65,7 @@ This model predicts the **probability that a loan applicant will default** on a 
 
 ```
 1. Load raw data → German Credit Dataset (CSV)
-2. Encode categorical features (LabelEncoder)
+2. Encode categoricals (Ordinal Mapping for savings/checking, LabelEncoder for rest)
 3. Create fairness attributes: gender, age_group
 4. Temporal split: Train (70%) | Test (15%) | Future/Drift (15%)
 5. Scale numeric features (StandardScaler)
@@ -79,15 +79,15 @@ This model predicts the **probability that a loan applicant will default** on a 
 
 ## Performance Metrics
 
-> Results on held-out **test set** (150 samples, 15% of data)
+> Results on held-out **test set** (300 samples, 15% of data)
 
-| Metric | Logistic Regression | XGBoost |
-|---|---|---|
-| Accuracy | ~0.72 | ~0.78 |
-| Precision | ~0.62 | ~0.68 |
-| Recall | ~0.58 | ~0.64 |
-| F1-Score | ~0.60 | ~0.66 |
-| ROC-AUC | ~0.76 | ~0.82 |
+| Accuracy | 0.45 | 0.58 |
+| Precision | 0.24 | 0.26 |
+| Recall | 0.45 | 0.27 |
+| F1-Score | 0.32 | 0.26 |
+| ROC-AUC | 0.43 | 0.48 |
+
+> ⚠️ **Audit Note**: Metrics reflect a **Biased Stress Test** scenario where intentional noise and correlation were injected to test fairness mitigation.
 
 > ⚠️ Exact values depend on training run. Check MLflow for authoritative metrics.
 
@@ -139,7 +139,7 @@ See `reports/shap_global.png` and `reports/shap_local.png`.
 | Historical bias in training data | HIGH | Fairness monitoring per release |
 | Model drift over time | HIGH | Monthly Evidently AI drift reports |
 | Gender inference from proxy variable | MEDIUM | Track actual gender when collected |
-| Small dataset (1,000 samples) | MEDIUM | Validate on production data before full deployment |
+| Small dataset (2,000 samples) | MEDIUM | Validate on production data before full deployment |
 | XGBoost opacity | MEDIUM | SHAP explanations for every prediction |
 | Adversarial applicants | LOW | Human review for borderline cases |
 

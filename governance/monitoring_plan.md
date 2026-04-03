@@ -12,18 +12,21 @@ This document defines the ongoing monitoring strategy for the Credit Default Pre
 
 ## Monitoring Architecture
 
+The system uses a **Pluggable Logger Architecture** (Art. 72) to allow seamless transition between environments:
+
 ```
 Production API (/predict)
        │
        ▼
-Prediction Logger (PostgreSQL / S3)
+Prediction Logger (Abstract Interface)
        │
-       ├──► Performance Monitor ──► Weekly ROC-AUC report
+       ├──► Local CSV (Demo/Audit Mode)  ──► data/production_logs.csv
        │
-       ├──► Drift detector ──────► Monthly Evidently AI report
-       │
-       └──► Fairness monitor ────► Quarterly fairness audit
+       └──► Postgres/S3 (Production Mode) ──► High-availability persistence
 ```
+
+*   **Audit Trail**: 100% of inferences are persisted with feature snapshots, decision probability, and human oversight flags.
+
 
 ---
 
