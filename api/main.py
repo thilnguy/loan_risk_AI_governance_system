@@ -42,21 +42,46 @@ MODELS_DIR = os.path.join(os.path.dirname(__file__), "..", "models")
 MONITORING_DIR = os.path.join(os.path.dirname(__file__), "..", "monitoring")
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 
+# ── Prediction Monitoring & Logging (Art. 72) ──────────────────────────────────
+
+class PredictionLogger:
+    """Abstract base for pluggable inference logging (Postgres, S3, CSV)."""
+    def log(self, applicant_id: str, probability: float, decision: str, human_review: bool, features: dict):
+        raise NotImplementedError
+
+class LocalCSVLogger(PredictionLogger):
+    """Default logger for Audit & Demo environments."""
+    def log(self, applicant_id: str, probability: float, decision: str, human_review: bool, features: dict):
+        log_file = os.path.join(DATA_DIR, "production_logs.csv")
+        record = {
+            "timestamp": datetime.datetime.now().isoformat(),
+            "applicant_id": applicant_id or "N/A",
+            "probability": round(probability, 4),
+            "decision": decision,
+            "human_review": human_review,
+            **features
+        }
+        df = pd.DataFrame([record])
+        df.to_csv(log_file, mode='a', header=not os.path.exists(log_file), index=False)
+        logger.info(f"💾 [CSV] Inference logged for {applicant_id}")
+
+class PostgresS3Logger(PredictionLogger):
+    """
+    Template for Production Infrastructure (Art. 72 Compliance).
+    In a real deployment, this would use 'asyncpg' or 'boto3'.
+    """
+    def log(self, applicant_id: str, probability: float, decision: str, human_review: bool, features: dict):
+        # MOCK IMPLEMENTATION for Audit Review
+        # logger.info(f"☁️ [PLANNED] Persisting to Postgres/S3 for applicant {applicant_id}...")
+        pass
+
+# Initialize active logger
+INFERENCE_LOGGER = LocalCSVLogger()
+
 def log_inference(applicant_id: str, probability: float, decision: str, human_review: bool, features: dict):
-    """Background task to save inference logs to CSV."""
-    log_file = os.path.join(DATA_DIR, "production_logs.csv")
-    record = {
-        "timestamp": datetime.datetime.now().isoformat(),
-        "applicant_id": applicant_id or "N/A",
-        "probability": round(probability, 4),
-        "decision": decision,
-        "human_review": human_review,
-        **features
-    }
-    df = pd.DataFrame([record])
-    # Append without header if file exists
-    df.to_csv(log_file, mode='a', header=not os.path.exists(log_file), index=False)
-    logger.info(f"💾 Logged inference for {applicant_id} to production database.")
+    """Background task to delegate logging to the active backend."""
+    INFERENCE_LOGGER.log(applicant_id, probability, decision, human_review, features)
+
 
 
 def load_model():
