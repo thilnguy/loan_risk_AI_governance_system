@@ -1,0 +1,21 @@
+# EU AI Act & Internal Governance Constraints
+version: "1.0"
+description: "AI Governance rules for the Loan Risk prediction model"
+
+policies:
+  # Inference bounds
+  auto_approve_threshold: 0.30
+  auto_decline_threshold: 0.6
+  
+  # When rules fail or risk is too high, require human review
+  human_review_required: true
+
+  # Circuit breaker threshold
+  circuit_breaker_max_drifted_features: 2
+
+  # Risk limits
+  max_risk_score_auto_approve: 2  # LOW risk
+  max_risk_score_allowed: 6       # HIGH is allowed only with review, EXTREME is instantly declined
+
+  # Fairness limits
+  disparate_impact_minimum: 0.80   # 80% rule
