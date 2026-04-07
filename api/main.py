@@ -11,6 +11,11 @@ from typing import Optional
 
 import datetime
 import importlib
+import sys
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from src.risk_model import evaluate_risk
+from src.governance_engine import GovernanceEngine
 
 import joblib
 import numpy as np
@@ -31,12 +36,8 @@ SCALER = None
 FEATURE_COLS = None
 MODEL_TYPE = "unknown"
 MODEL_VERSION = "v1.0"
-CIRCUIT_BREAKER_ACTIVE = False
 
-# ── Risk thresholds (configurable) ────────────────────────────────────────────
-THRESHOLD_LOW = 0.30       # below this → APPROVED
-THRESHOLD_HIGH = 0.60      # above this → DECLINED
-# Between → REVIEW (human oversight required per EU AI Act)
+POLICY_ENGINE = GovernanceEngine()
 
 MODELS_DIR = os.path.join(os.path.dirname(__file__), "..", "models")
 MONITORING_DIR = os.path.join(os.path.dirname(__file__), "..", "monitoring")
@@ -116,20 +117,6 @@ def load_model():
             FEATURE_COLS = json.load(f)
         logger.info(f"✅ Feature columns loaded: {len(FEATURE_COLS)} features")
 
-    # Circuit Breaker Logic (Drift detection)
-    global CIRCUIT_BREAKER_ACTIVE
-    drift_file = os.path.join(MONITORING_DIR, "drift_results.json")
-    if os.path.exists(drift_file):
-        try:
-            with open(drift_file) as f:
-                drift_data = json.load(f)
-            drift_count = sum(1 for feat in drift_data.values() if feat.get("psi", 0) > 0.2)
-            if drift_count >= 3:
-                CIRCUIT_BREAKER_ACTIVE = True
-                logger.error(f"🚨 CIRCUIT BREAKER ACTIVATED! High drift detected in {drift_count} features. Forcing 100% human review.")
-        except Exception as e:
-            logger.warning(f"Failed to read drift results: {e}")
-
     return True
 
 
@@ -181,44 +168,8 @@ app.add_middleware(
 )
 
 
-def make_decision(probability: float) -> tuple[str, str, str, bool]:
-    """Map probability to credit decision with rationale."""
-    if CIRCUIT_BREAKER_ACTIVE:
-        return (
-            "REVIEW", 
-            "HIGH", 
-            "SYSTEM UNDER MAINTENANCE: High concept drift detected. Fallback circuit breaker activated. 100% human review required.", 
-            True
-        )
+# make_decision logic replaced by POLICY_ENGINE.evaluate_prediction
 
-    risk_score = int(probability * 100)
-
-    if probability < THRESHOLD_LOW:
-        decision = "APPROVED"
-        risk_level = "LOW"
-        rationale = (
-            f"Low default probability ({probability:.1%}). "
-            "Standard eligibility criteria met. Automated approval."
-        )
-        human_review = False
-    elif probability > THRESHOLD_HIGH:
-        decision = "DECLINED"
-        risk_level = "HIGH"
-        rationale = (
-            f"High default probability ({probability:.1%}). "
-            "Application does not meet minimum creditworthiness threshold."
-        )
-        human_review = True  # high-stakes decline always needs human confirmation
-    else:
-        decision = "REVIEW"
-        risk_level = "MEDIUM"
-        rationale = (
-            f"Borderline default probability ({probability:.1%}). "
-            "EU AI Act requires mandatory human review before final decision."
-        )
-        human_review = True
-
-    return decision, risk_level, rationale, human_review
 
 
 @app.get("/health", response_model=HealthResponse, tags=["System"])
@@ -299,8 +250,14 @@ async def predict(
 
         # Predict
         probability = float(MODEL.predict_proba(X)[0][1])
-        decision, risk_level, rationale, human_review = make_decision(probability)
-        risk_score = int(probability * 100)
+        
+        # 1. Formal Risk Scoring
+        risk_results = evaluate_risk(probability, raw_features)
+        risk_score = risk_results["risk_score"]
+        risk_level = risk_results["risk_tier"]
+
+        # 2. Governance-as-Code Policy Enforcement
+        decision, rationale, human_review = POLICY_ENGINE.evaluate_prediction(probability, risk_score, risk_level)
 
         # Local Explanation using SHAP (EU AI Act Right to Explanation)
         explanations = []
