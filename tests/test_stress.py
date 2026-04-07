@@ -87,10 +87,23 @@ def test_adversarial_noise_injection():
     assert response.status_code in [200, 422]
 
 
+def test_adversarial_perturbation():
+    """Test Adversarial: Minor continuous perturbations shouldn't cause wild risk swings."""
+    payload = get_base_payload()
+    baseline_resp = client.post("/predict", json=payload).json()
+    
+    # Perturb credit_amount by $1
+    payload["credit_amount"] += 1
+    adv_resp = client.post("/predict", json=payload).json()
+    
+    # Verify the decision / risk level has not completely flipped from a $1 change
+    assert baseline_resp["risk_level"] == adv_resp["risk_level"]
+
+
 def test_circuit_breaker_kill_switch(monkeypatch):
     """Test Governance: Circuit breaker forces REVIEW on high drift."""
-    # Force the circuit breaker active
-    monkeypatch.setattr(main, "CIRCUIT_BREAKER_ACTIVE", True)
+    # Force the circuit breaker active inside the POLICY_ENGINE
+    monkeypatch.setattr(main.POLICY_ENGINE, "_check_circuit_breaker", lambda rules: True)
     
     payload = get_base_payload()
     response = client.post("/predict", json=payload)
@@ -99,6 +112,7 @@ def test_circuit_breaker_kill_switch(monkeypatch):
     
     # Everything MUST go to REVIEW regardless of base probability
     assert data["decision"] == "REVIEW"
-    assert data["risk_level"] == "HIGH"
-    assert "CIRCUIT_BREAKER_ACTIVE" in response.text or "SYSTEM UNDER MAINTENANCE" in data["decision_rationale"]
+    # Risk level from risk model should remain consistent with base probability
+    assert data["risk_level"] == "LOW"
+    assert "CIRCUIT BREAKER" in response.text or "SYSTEM UNDER MAINTENANCE" in data["decision_rationale"]
     assert data["human_review_required"] is True
