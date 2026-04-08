@@ -64,6 +64,8 @@ loan_risk_AI_governance_system/
 │   ├── main.py                 # FastAPI application
 │   ├── schemas.py              # Pydantic input/output schemas
 │   └── Dockerfile              # Container for API
+├── dashboard/
+│   └── app.py                  # Streamlit Governance UI
 ├── models/                     # Saved models (.pkl) + scaler
 ├── monitoring/                 # drift_report.html, drift_results.json
 ├── reports/                    # ROC curves, SHAP plots, fairness charts
@@ -114,10 +116,15 @@ python src/monitoring.py
 python src/fairness.py
 
 # 7. Start API (ServingAgent)
-cd api && uvicorn main:app --reload
-# open http://localhost:8000/docs
+cd api && uvicorn main:app --reload &
+# API will be available at http://localhost:8000/docs
+cd ..
 
-# 8. Run tests
+# 8. Start Governance Dashboard
+streamlit run dashboard/app.py
+# Dashboard will be available at http://localhost:8501
+
+# 9. Run tests
 pytest tests/ -v
 ```
 
