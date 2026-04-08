@@ -279,8 +279,11 @@ See `monitoring/drift_report.html` for full interactive Evidently AI report.
 ## 🌟 Key Project Highlights
 
 - Built an **end-to-end ML pipeline** with MLflow tracking, XGBoost training, and FastAPI deployment for credit risk prediction
-- Implemented **model monitoring** including data drift detection (PSI-based) and performance degradation tracking using Evidently AI
-- Performed **fairness analysis** using Fairlearn (demographic parity, equal opportunity, FPR gap) and model explainability using SHAP to ensure Responsible AI compliance
+- Engineered an interactive **Streamlit Governance Dashboard** for real-time monitoring of system health, policy thresholds, and individual inference traces
+- Implemented **Governance-as-Code Engine** & **Circuit Breakers** forcing 100% human review when severe data drift (PSI > 0.2) or threshold violations occur
+- Developed a high-precision **Inference Audit Interface** with explicit index-mapping to securely retrieve exact input features, trace IDs, and risk decisions
+- Performed **fairness analysis** using Fairlearn (demographic parity, TPR gap) and extreme **adversarial stress testing** to ensure Responsible AI compliance
+- Integrated **Global & Local SHAP Explainability**, translating complex probability scores into human-readable business impact statements for non-technical auditors
 - Designed a comprehensive **AI governance framework** aligned with EU AI Act (HIGH-RISK classification), including Model Card, Risk Assessment, Monitoring Plan, and Human Oversight Policy
 
 ---
