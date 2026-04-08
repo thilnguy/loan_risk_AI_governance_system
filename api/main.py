@@ -12,6 +12,7 @@ from typing import Optional
 import datetime
 import importlib
 import sys
+import uuid
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from src.risk_model import evaluate_risk
@@ -190,6 +191,9 @@ async def predict(
     background_tasks: BackgroundTasks,
     applicant_id: Optional[str] = None,
 ):
+    # Ensure traceability: Generate a UUID if no ID is provided
+    if not applicant_id:
+        applicant_id = f"TRACE-{uuid.uuid4().hex[:8].upper()}"
     """
     ## Credit Default Prediction
 

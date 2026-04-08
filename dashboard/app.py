@@ -137,27 +137,42 @@ with col1:
 
 with col2:
     st.subheader("Local Component (Individual Audit)")
-    if not logs_df.empty and "explanation" in logs_df.columns:
-        # Create a display string for the dropdown
-        logs_df["display_id"] = logs_df.apply(
-            lambda x: f"{x['timestamp'][-12:]} | ID: {str(x['applicant_id'])} | {x['decision']}", axis=1
+    if not logs_df.empty:
+        audit_df = logs_df.copy()
+        
+        # Ensure NA handling is explicit
+        audit_df['applicant_id'] = audit_df['applicant_id'].fillna("N/A")
+        
+        if "explanation" not in audit_df.columns:
+            audit_df["explanation"] = "No explanation recorded"
+            
+        audit_df["display_id"] = audit_df.apply(
+            lambda x: f"{str(x['timestamp'])[:19].replace('T', ' ')} | ID: {str(x['applicant_id'])} | {x.get('decision', 'N/A')}", axis=1
         )
         
-        # Unique selection from dropdown (sorted by newest first)
-        options = logs_df["display_id"].tolist()[::-1]
-        selected_option = st.selectbox("Select Inference to Audit:", options)
+        # Reverse to show newest at top of list
+        audit_options = audit_df.index.tolist()[::-1]
         
-        # Get the row data for the selected option
-        selected_row = logs_df[logs_df["display_id"] == selected_option].iloc[0]
+        selected_idx = st.selectbox(
+            "Select Inference to Audit:",
+            options=audit_options,
+            format_func=lambda i: audit_df.at[i, "display_id"]
+        )
         
-        st.info(f"**Audit Record for ID:** {selected_row['applicant_id']}")
+        # 3. Retrieve the EXACT row
+        selected_row = audit_df.loc[selected_idx]
+        
+        # Display ID (Handle NaN IDs from legacy logs)
+        safe_id = str(selected_row['applicant_id']) if pd.notna(selected_row['applicant_id']) else "N/A"
+        
+        st.info(f"**Audit Record for ID:** `{safe_id}`")
         st.write(f"**Final Decision:** `{selected_row['decision']}`")
         st.write(f"**Model Probability:** `{selected_row['probability']:.4f}`")
         
         st.write("**Impact Analysis (SHAP):**")
         expl_list = str(selected_row["explanation"]).split(" | ")
         for item in expl_list:
-            if "increases risk" in item:
+            if "increases" in item.lower():
                 st.write(f"🔴 {item}")
             else:
                 st.write(f"🟢 {item}")
@@ -165,7 +180,17 @@ with col2:
         # Show mini feature view for context
         with st.expander("View Applicant Data Snapshot"):
             exclude = ["timestamp", "applicant_id", "probability", "decision", "human_review", "explanation", "display_id"]
-            mini_df = selected_row.drop(labels=exclude).to_frame(name="Value")
-            st.table(mini_df)
+            # Create a clean formatted copy of the features
+            features_row = selected_row.drop(labels=exclude)
+            formatted_features = []
+            for k, v in features_row.items():
+                if isinstance(v, (int, float)):
+                    # Format large currency amounts for better readability
+                    val_str = f"{v:,.2f}" if v > 1000 or v < -1000 else f"{v}"
+                else:
+                    val_str = str(v)
+                formatted_features.append({"Feature": k, "Value": val_str})
+            
+            st.table(pd.DataFrame(formatted_features).set_index("Feature"))
     else:
         st.write("No specific local explanation data found in production logs.")
