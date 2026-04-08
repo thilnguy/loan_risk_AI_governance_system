@@ -47,12 +47,12 @@ DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 
 class PredictionLogger:
     """Abstract base for pluggable inference logging (Postgres, S3, CSV)."""
-    def log(self, applicant_id: str, probability: float, decision: str, human_review: bool, features: dict):
+    def log(self, applicant_id: str, probability: float, decision: str, human_review: bool, explanation: list, features: dict):
         raise NotImplementedError
 
 class LocalCSVLogger(PredictionLogger):
     """Default logger for Audit & Demo environments."""
-    def log(self, applicant_id: str, probability: float, decision: str, human_review: bool, features: dict):
+    def log(self, applicant_id: str, probability: float, decision: str, human_review: bool, explanation: list, features: dict):
         log_file = os.path.join(DATA_DIR, "production_logs.csv")
         record = {
             "timestamp": datetime.datetime.now().isoformat(),
@@ -60,6 +60,7 @@ class LocalCSVLogger(PredictionLogger):
             "probability": round(probability, 4),
             "decision": decision,
             "human_review": human_review,
+            "explanation": " | ".join(explanation),
             **features
         }
         df = pd.DataFrame([record])
@@ -71,7 +72,7 @@ class PostgresS3Logger(PredictionLogger):
     Template for Production Infrastructure (Art. 72 Compliance).
     In a real deployment, this would use 'asyncpg' or 'boto3'.
     """
-    def log(self, applicant_id: str, probability: float, decision: str, human_review: bool, features: dict):
+    def log(self, applicant_id: str, probability: float, decision: str, human_review: bool, explanation: list, features: dict):
         # MOCK IMPLEMENTATION for Audit Review
         # logger.info(f"☁️ [PLANNED] Persisting to Postgres/S3 for applicant {applicant_id}...")
         pass
@@ -79,9 +80,9 @@ class PostgresS3Logger(PredictionLogger):
 # Initialize active logger
 INFERENCE_LOGGER = LocalCSVLogger()
 
-def log_inference(applicant_id: str, probability: float, decision: str, human_review: bool, features: dict):
+def log_inference(applicant_id: str, probability: float, decision: str, human_review: bool, explanation: list, features: dict):
     """Background task to delegate logging to the active backend."""
-    INFERENCE_LOGGER.log(applicant_id, probability, decision, human_review, features)
+    INFERENCE_LOGGER.log(applicant_id, probability, decision, human_review, explanation, features)
 
 
 
@@ -288,7 +289,7 @@ async def predict(
         )
 
         # Append to Inference Logger
-        background_tasks.add_task(log_inference, applicant_id, probability, decision, human_review, raw_features)
+        background_tasks.add_task(log_inference, applicant_id, probability, decision, human_review, explanations, raw_features)
 
         return PredictionResponse(
             applicant_id=applicant_id,
