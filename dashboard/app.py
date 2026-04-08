@@ -13,6 +13,7 @@ POLICIES_PATH = os.path.join(BASE_DIR, "policies", "rules.yaml")
 DRIFT_PATH = os.path.join(BASE_DIR, "monitoring", "drift_results.json")
 PERF_PATH = os.path.join(BASE_DIR, "monitoring", "perf_results.json")
 LOGS_PATH = os.path.join(BASE_DIR, "data", "production_logs.csv")
+SHAP_PLOT_PATH = os.path.join(BASE_DIR, "reports", "shap_beeswarm.png")
 
 st.title("🛡️ L5 Compliance-Ready AI Governance")
 st.markdown("Real-time monitoring and enforcement of European Union AI Act requirements.")
@@ -120,3 +121,51 @@ with col2:
         st.plotly_chart(fig4, use_container_width=True)
     else:
         st.info("No performance data found.")
+
+st.divider()
+
+# --- 5. Model Explainability (XAI) ---
+st.header("🧠 Model Explainability (Right to Explanation)")
+col1, col2 = st.columns(2)
+
+with col1:
+    st.subheader("Global Component (Feature Importance)")
+    if os.path.exists(SHAP_PLOT_PATH):
+        st.image(SHAP_PLOT_PATH, caption="SHAP Summary Plot (Global Feature Contribution)")
+    else:
+        st.warning("Global SHAP report image not found in `/reports`.")
+
+with col2:
+    st.subheader("Local Component (Individual Audit)")
+    if not logs_df.empty and "explanation" in logs_df.columns:
+        # Create a display string for the dropdown
+        logs_df["display_id"] = logs_df.apply(
+            lambda x: f"{x['timestamp'][-12:]} | ID: {str(x['applicant_id'])} | {x['decision']}", axis=1
+        )
+        
+        # Unique selection from dropdown (sorted by newest first)
+        options = logs_df["display_id"].tolist()[::-1]
+        selected_option = st.selectbox("Select Inference to Audit:", options)
+        
+        # Get the row data for the selected option
+        selected_row = logs_df[logs_df["display_id"] == selected_option].iloc[0]
+        
+        st.info(f"**Audit Record for ID:** {selected_row['applicant_id']}")
+        st.write(f"**Final Decision:** `{selected_row['decision']}`")
+        st.write(f"**Model Probability:** `{selected_row['probability']:.4f}`")
+        
+        st.write("**Impact Analysis (SHAP):**")
+        expl_list = str(selected_row["explanation"]).split(" | ")
+        for item in expl_list:
+            if "increases risk" in item:
+                st.write(f"🔴 {item}")
+            else:
+                st.write(f"🟢 {item}")
+        
+        # Show mini feature view for context
+        with st.expander("View Applicant Data Snapshot"):
+            exclude = ["timestamp", "applicant_id", "probability", "decision", "human_review", "explanation", "display_id"]
+            mini_df = selected_row.drop(labels=exclude).to_frame(name="Value")
+            st.table(mini_df)
+    else:
+        st.write("No specific local explanation data found in production logs.")
