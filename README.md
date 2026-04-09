@@ -46,6 +46,20 @@ graph TD
     K --> L[Equal Opportunity Metrics]
 ```
 
+### 🛡️ Data Flow: Model to Human Oversight
+
+```mermaid
+graph LR
+    Model[🤖 Model Inference Engine] --> Data[Probability Scores & Drift Metrics]
+    Data --> CB{🛡️ Circuit Breaker}
+    CB -- "Low Risk (< 30%) & No Drift" --> AD[✅ Auto-Decision: Approved]
+    CB -- "Medium/High Risk (≥ 30%) OR Drift PSI > 0.2" --> HR[⚠️ Human Review Queue]
+    HR --> Explainer[🔍 SHAP Local Explanations]
+    Explainer --> Steward[👩‍⚖️ AI Steward Final Decision]
+    Steward --> Audit[Log to Inference Audit Trail]
+    AD --> Audit
+```
+
 ---
 
 ## 📁 Project Structure
